@@ -1,12 +1,12 @@
 import tensorflow as tf
-from unet import unet
+from fusion_net import FusionNet
 
 
 class Network(object):
-    def __init__(self):
-        pass
+    def __init__(self, **params):
+        self.net = FusionNet(**params)
 
-    def build(self, input_batch, example_parameter_string='Example', example_parameter_int=3):
+    def build(self, input_batch, training=True):
         """
         This function is where you write the code for your network.
           The input is a batch of images of size (N,H,W,1)
@@ -17,17 +17,10 @@ class Network(object):
         where the last channel is the UNNORMALIZEd calss probabilities
           (before softmax) for classes background,
         foreground and edge.
-        :param input_batch:
-        :param example_parameter_int:
-        :param example_parameter_string: A parameter for example.
-                                           See Params file to change the value
-        :return:
+        :param input_batch: The batch for the current train.
+        :param training: Whether or not it is a train run.
+        :return: The output from the network.
         """
-        for i in range(example_parameter_int):
-            print('{}: '.format(i) + example_parameter_string)
-        # w = tf.get_variable(name='w', shape=(1, 1, 1, 3), dtype=tf.float32,
-        #                     initializer=tf.random_normal_initializer)
-        # out = tf.nn.conv2d(input_batch, w, strides=[1, 1, 1, 1], padding='SAME')
-        out = unet(input_batch)
-        tf.summary.scalar('my_summary', tf.reduce_mean(out))
+        out = self.net.fusion_net(input_batch, training=training)
+        tf.summary.scalar('out-mean', tf.reduce_mean(out))
         return out

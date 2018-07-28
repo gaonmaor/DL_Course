@@ -3,12 +3,8 @@ import tensorflow as tf
 import os
 import glob
 import cv2
-
-# import numpy as np
-# import matplotlib.pyplot as plt
-# import matplotlib.image as mpimage
-# import utils
-
+import random
+import math
 
 __author__ = 'assafarbelle'
 
@@ -16,7 +12,7 @@ __author__ = 'assafarbelle'
 class CSVSegReaderRandom(object):
     def __init__(self, filenames, image_size=(), crop_size=(128, 128), crops_per_image=50,
                  num_threads=4, capacity=20, min_after_dequeue=10, num_examples=None,
-                 data_format='NCHW', random=True):
+                 data_format='NCHW', is_random=True):
         """
         CSVSegReader is a class that reads csv files containing paths to
           input image and segmentation image and outputs
@@ -56,11 +52,11 @@ class CSVSegReaderRandom(object):
         elif isinstance(num_examples, list):
             raw_filenames = [f_name for n, f_name in enumerate(raw_filenames) if n in num_examples]
 
-        self.raw_queue = tf.train.string_input_producer(raw_filenames, seed=0, shuffle=random)
+        self.raw_queue = tf.train.string_input_producer(raw_filenames, seed=0, shuffle=is_random)
         self.image_size = image_size
         self.crop_size = crop_size
         self.crops_per_image = crops_per_image
-        self.random = random
+        self.random = is_random
         self.batch_size = None
         self.num_threads = num_threads
         self.capacity = capacity
@@ -76,8 +72,8 @@ class CSVSegReaderRandom(object):
 
         image = tf.reshape(tf.cast(tf.image.decode_png(im_raw, channels=1, dtype=tf.uint16), tf.float32),
                            self.image_size, name='input_image')
-        seg = tf.reshape(tf.cast(tf.image.decode_png(seg_raw, channels=1, dtype=tf.uint8), tf.float32), self.image_size,
-                         name='input_seg')
+        seg = tf.reshape(tf.cast(tf.image.decode_png(seg_raw, channels=1, dtype=tf.uint8), tf.float32),
+                         self.image_size, name='input_seg')
         if self.partial_frame:
             crop_y_start = int(((1 - self.partial_frame) * self.image_size[0]) / 2)
             crop_y_end = int(((1 + self.partial_frame) * self.image_size[0]) / 2)
@@ -88,7 +84,7 @@ class CSVSegReaderRandom(object):
 
         return image, seg, im_filename[0][0], im_filename[0][1]
 
-    def get_batch(self, batch_size=1):
+    def get_batch(self, batch_size=1, use_aug=False):
         self.batch_size = batch_size
         image_in, seg_in, file_name, seg_filename = self._get_image()
         concat = tf.stack(axis=2, values=[image_in, seg_in])
@@ -96,13 +92,46 @@ class CSVSegReaderRandom(object):
         seg_list = []
         filename_list = []
         seg_filename_list = []
+        crop_probability = 0.8
+        crop_min_percent = 0.6
+        crop_max_percent = 1.
         for _ in range(self.crops_per_image):
             cropped = tf.random_crop(concat, [self.crop_size[0], self.crop_size[1], 2])
             shape = cropped.get_shape()
+            if use_aug:
+                cropped = tf.image.resize_images(cropped,
+                                                 (int(self.crop_size[0] * random.uniform(0.5, 1.5)),
+                                                  int(self.crop_size[1] * random.uniform(0.5, 1.5))))
+                cropped = tf.image.resize_image_with_crop_or_pad(cropped, self.crop_size[0], self.crop_size[1])
             fliplr = tf.image.random_flip_left_right(cropped)
             flipud = tf.image.random_flip_up_down(fliplr)
             rot_ang = tf.random_uniform([], minval=0, maxval=2, dtype=tf.int32)
             rot = tf.image.rot90(flipud, k=rot_ang)
+
+            if use_aug:
+                transforms = []
+                identity = tf.constant([1, 0, 0, 0, 1, 0, 0, 0], dtype=tf.float32)
+                angle_rad = random.uniform(-0.5 * math.pi, 0.5 * math.pi)
+                if angle_rad > 0:
+                    transforms.append(tf.contrib.image.angles_to_projective_transforms(angle_rad,
+                                                                                       self.crop_size[0],
+                                                                                       self.crop_size[1]))
+
+                if crop_probability > 0:
+                    crop_pct = tf.random_uniform([1], crop_min_percent, crop_max_percent)
+                    left = tf.random_uniform([1], 0, self.crop_size[0] * (1 - crop_pct))
+                    top = tf.random_uniform([1], 0, self.crop_size[1] * (1 - crop_pct))
+                    crop_transform = tf.stack([crop_pct, tf.zeros([1]), top,
+                                               tf.zeros([1]), crop_pct, left,
+                                               tf.zeros([1]), tf.zeros([1])], 1)
+                    coin = tf.less(tf.random_uniform([1], 0, 1.0), crop_probability)
+                    transforms.append(tf.where(coin, crop_transform,
+                                               tf.tile(tf.expand_dims(identity, 0), [1, 1])))
+
+                if transforms:
+                    rot = tf.contrib.image.transform(rot, tf.contrib.image.compose_transforms(*transforms),
+                                                     interpolation='NEAREST')
+
             rot.set_shape(shape)
             image, seg = tf.unstack(rot, 2, 2)
             image = tf.expand_dims(image, 2)
@@ -122,8 +151,7 @@ class CSVSegReaderRandom(object):
                                                       num_threads=self.num_threads,
                                                       capacity=self.capacity,
                                                       min_after_dequeue=self.min_after_dequeue,
-                                                      enqueue_many=True
-                                                      )
+                                                      enqueue_many=True)
         if self.data_format == 'NCHW':
             image_batch = tf.transpose(image_batch, perm=[0, 3, 1, 2])
             seg_batch = tf.transpose(seg_batch, perm=[0, 3, 1, 2])
@@ -133,9 +161,10 @@ class CSVSegReaderRandom(object):
 
 class CSVSegReader(object):
     def __init__(self, filenames, base_folder='.', image_size=(64, 64, 1), num_threads=4,
-                 capacity=20, min_after_dequeue=10, num_examples=None, random=True, data_format='NCHW'):
+                 capacity=20, min_after_dequeue=10, num_examples=None, is_random=True, data_format='NCHW'):
         """
-        CSVSegReader is a class that reads csv files containing paths to input image and segmentation image and outputs
+        CSVSegReader is a class that reads csv files containing paths to input image and
+          segmentation image and outputs
         batches of corresponding image inputs and segmentation inputs.
          The inputs to the class are:
 
@@ -146,7 +175,7 @@ class CSVSegReader(object):
             capacity: capacity of the shuffle queue, the larger capacity results in better mixing
             min_after_dequeue: the minimum example in the queue after a dequeue op. ensures good mixing
         """
-        num_epochs = None if random else 1
+        num_epochs = None if is_random else 1
         raw_filenames = []
 
         for filename in filenames:
@@ -164,7 +193,7 @@ class CSVSegReader(object):
             raw_filenames = [f_name for n, f_name in enumerate(raw_filenames) if n in num_examples]
             # seg_filenames = [f_name for n, f_name in enumerate(seg_filenames) if n in num_examples]
 
-        self.raw_queue = tf.train.string_input_producer(raw_filenames, num_epochs=num_epochs, shuffle=random, seed=0)
+        self.raw_queue = tf.train.string_input_producer(raw_filenames, num_epochs=num_epochs, shuffle=is_random, seed=0)
         # self.seg_queue = tf.train.string_input_producer(seg_filenames, num_epochs=num_epochs, shuffle=random, seed=0)
 
         self.image_size = image_size
@@ -174,7 +203,7 @@ class CSVSegReader(object):
         self.min_after_dequeue = min_after_dequeue
         self.batch_size = None
         self.base_folder = base_folder
-        self.random = random
+        self.random = is_random
         self.data_format = data_format
 
     def _get_image(self):
@@ -187,8 +216,8 @@ class CSVSegReader(object):
         seg_raw = tf.read_file(self.base_folder + filename[0][1])
         image = tf.reshape(tf.cast(tf.image.decode_png(im_raw, channels=1, dtype=tf.uint16), tf.float32),
                            self.image_size, name='input_image')
-        seg = tf.reshape(tf.cast(tf.image.decode_png(seg_raw, channels=1, dtype=tf.uint8), tf.float32), self.image_size,
-                         name='input_seg')
+        seg = tf.reshape(tf.cast(tf.image.decode_png(seg_raw, channels=1, dtype=tf.uint8), tf.float32),
+                         self.image_size, name='input_seg')
 
         return image, seg, filename[0][0], filename[0][1]
 
