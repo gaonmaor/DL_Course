@@ -107,7 +107,7 @@ def train():
                 decay_edge = decay_edge * 0.99 + (decay_edge / total_loss) * 0.01
             cw = params.class_weights
             loss = (loss_bg * decay_bg * cw[0] + loss_fg * decay_fg * cw[1] + loss_edge * decay_edge * cw[2])
-            # loss = (loss_bg * cw[0] + loss_fg * cw[1] + loss_edge * cw[2])
+            # loss = (loss_bg * cw[0] + loss_fg * cw[1] + loss_edge * cw[2]) # Constant weight version.
             out_fg = tf.equal(tf.argmax(net_seg, 3), 1)
             intersection = tf.reduce_sum(tf.to_float(tf.logical_and(out_fg, gt_fg_bool)),
                                          axis=(1, 2), name='intersection')
