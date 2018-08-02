@@ -174,7 +174,8 @@ def summary_tag_replace(summary_str, old, new=''):
 
 conv2d_linear = partial(tf.layers.conv2d,
                         kernel_initializer=tf.truncated_normal_initializer(),
-                        kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1),
+                        kernel_regularizer=tf.contrib.layers.l1_l2_regularizer(scale_l1=3.0,
+                                                                               scale_l2=3.0),
                         padding="SAME")
 
 
@@ -202,7 +203,8 @@ def bn_conv_layer(prev_layer, output_dim, kernel_size, name="BN_CONV", training=
     with variable_scope(name):
         conv_layer = tf.layers.conv2d(prev_layer, output_dim, kernel_size,
                                       kernel_initializer=tf.truncated_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.3),
+                                      kernel_regularizer=tf.contrib.layers.l1_l2_regularizer(scale_l1=3.0,
+                                                                                             scale_l2=3.0),
                                       padding="SAME", use_bias=False, activation=None)
         conv_layer = tf.layers.batch_normalization(conv_layer, training=training)
         return prelu(conv_layer)
@@ -221,7 +223,8 @@ def bn_conv2d_transpose_layer(prev_layer, output_dim, kernel_size, strides, name
     with variable_scope(name):
         conv_layer = tf.layers.conv2d_transpose(prev_layer, output_dim, kernel_size, strides,
                                                 kernel_initializer=tf.truncated_normal_initializer(),
-                                                kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.3),
+                                                kernel_regularizer=tf.contrib.layers.l1_l2_regularizer(scale_l1=3.0,
+                                                                                                       scale_l2=3.0),
                                                 padding="SAME", use_bias=False, activation=None)
         conv_layer = tf.layers.batch_normalization(conv_layer, training=training)
         return prelu(conv_layer)
