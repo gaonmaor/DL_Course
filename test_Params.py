@@ -34,16 +34,19 @@ class TestParamsBase(object):
 
 class TestParams(TestParamsBase):
     # Net Parameters
-    net_build_params = {'layers': 2, 'kernel_size': 7, 'kernel_num': 32, 'num_repeat': 3}
+    # net_build_params = {'layers': 2, 'kernel_size': 7, 'kernel_num': 32, 'num_repeat': 3}
+    net_build_params = {'layers': 2, 'kernel_size': 3, 'kernel_num': 16, 'num_repeat': 3}
 
     # Hardware
-    use_gpu = True  # IF NO GPU AVAILABE, SET TO FALSE
+    use_gpu = False  # IF NO GPU AVAILABE, SET TO FALSE
     gpu_id = 0  # IF MORE THAN 1 GPU IS AVAILABLE, SELECT WHICH ONE
     dry_run = False  # SET TO TRUE IF YOU DO NOT WANT TO SAVE ANY OUTPUTS (GOOD WHEN DEBUGGING)
     profile = False  # SET TO TRUE FOR THROUGHPUT PROFILING
 
     image_shape = [512, 640]  # crop size of the input image
     data_dir = os.path.join(ROOT_DATA_DIR, 'Test', 'RawImages')
-    load_checkpoint_path = os.path.join("Best Model", "model_604500.ckpt")
+    # load_checkpoint_path = os.path.join("Best Model", "model_604500.ckpt")
+    load_checkpoint_path = os.path.join('.', 'Logs', 'fusion_2GPU', '2018-08-01_115406',
+                                        'model_10000.ckpt')
     experiment_name = 'fusion_2gpu'
     filename_regexp = r'calibrate2-P01.[0-9]{3}.TIF'

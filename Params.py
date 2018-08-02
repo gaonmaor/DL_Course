@@ -8,7 +8,7 @@ ROOT_DATA_DIR = os.path.join('.', 'Data')
 
 class Params(object):
     # Net Parameters
-    net_build_params = {'layers': 2, 'kernel_size': 7, 'kernel_num': 32, 'num_repeat': 3}
+    net_build_params = {'layers': 2, 'kernel_size': 3, 'kernel_num': 16, 'num_repeat': 3}
 
     # Hardware
     use_gpu = True  # IF NO GPU AVAILABE, SET TO FALSE
@@ -16,12 +16,12 @@ class Params(object):
     dry_run = False  # SET TO TRUE IF YOU DO NOT WANT TO SAVE ANY OUTPUTS (GOOD WHEN DEBUGGING)
     profile = False  # SET TO TRUE FOR THROUGHPUT PROFILING
 
-    batch_size = 50  # number of images per batch
+    batch_size = 640  # number of images per batch
     num_iterations = 1000000  # total number of iterations
     learning_rate = 1e-3  # learning rate
 
     crops_per_image = 5  # number of random crops per image, used for faster training
-    crop_size = (16, 16)  # crop size of the input image
+    crop_size = (20, 20)  # crop size of the input image
 
     # Training Regime
 
